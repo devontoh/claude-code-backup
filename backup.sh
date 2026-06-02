@@ -47,26 +47,23 @@ if [ "$1" = "--check" ]; then
         exit 1
     fi
 
-    newest=$(echo "$files" | python3 -c "
+    echo "$files" | python3 -c "
 import json, sys
 from datetime import datetime, timezone
 files = sorted(json.load(sys.stdin), key=lambda x: x['ModTime'], reverse=True)
 f = files[0]
 mod = datetime.fromisoformat(f['ModTime'].replace('Z','+00:00'))
-age = (datetime.now(timezone.utc) - mod).total_seconds() / 3600
-print(f\"{f['Name']}  ({age:.1f}h ago)  ({f['Size']/1024/1024:.1f} MB)\")
-if age > 48:
-    print('WARNING: backup is stale')
-    sys.exit(1)
-")
-    echo "OK - newest backup: $newest"
-    echo ""
-    echo "All backups in $REMOTE_NAME:$REMOTE_FOLDER:"
-    echo "$files" | python3 -c "
-import json, sys
-files = sorted(json.load(sys.stdin), key=lambda x: x['ModTime'], reverse=True)
+age_hrs = (datetime.now(timezone.utc) - mod).total_seconds() / 3600
+
+if age_hrs > 48:
+    print(f'WARNING: newest backup is {age_hrs/24:.1f} days old - check backup.log')
+else:
+    print(f'OK - {f[\"Name\"]}  ({age_hrs:.1f}h ago)  ({f[\"Size\"]/1024/1024:.1f} MB)')
+
+print('')
+print('All backups:')
 for f in files:
-    print(f\"  {f['Name']}  ({f['Size']/1024/1024:.1f} MB)\")
+    print(f'  {f[\"Name\"]}  ({f[\"Size\"]/1024/1024:.1f} MB)')
 "
     exit 0
 fi
@@ -74,14 +71,13 @@ fi
 # BACKUP
 log "Backup started."
 
+TMP_DIR=""
 TMP_PASS=""
 TMP_TAR=""
 TMP_ENC=""
 
 cleanup() {
-    [ -n "$TMP_PASS" ] && rm -f "$TMP_PASS"
-    [ -n "$TMP_TAR"  ] && rm -f "$TMP_TAR"
-    [ -n "$TMP_ENC"  ] && rm -f "$TMP_ENC"
+    [ -n "$TMP_DIR" ] && rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
 
@@ -95,9 +91,10 @@ DATE=$(date '+%Y-%m-%d_%H%M')
 BACKUP_NAME="claude-backup-$DATE.tar.gz.gpg"
 REMOTE_PATH="$REMOTE_NAME:$REMOTE_FOLDER/$BACKUP_NAME"
 
-TMP_PASS=$(mktemp)
-TMP_TAR=$(mktemp).tar.gz
-TMP_ENC=$(mktemp).tar.gz.gpg
+TMP_DIR=$(mktemp -d)
+TMP_PASS="$TMP_DIR/passphrase"
+TMP_TAR="$TMP_DIR/backup.tar.gz"
+TMP_ENC="$TMP_DIR/backup.tar.gz.gpg"
 
 printf '%s' "$PASSPHRASE" > "$TMP_PASS"
 
