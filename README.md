@@ -35,7 +35,7 @@ If you tried uploading your projects manually to iCloud or Google Drive and it a
 ### Windows
 
 ```powershell
-git clone https://github.com/D3V0NT/claude-code-backup.git
+git clone https://github.com/devontoh/claude-code-backup.git
 cd claude-code-backup
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
@@ -45,7 +45,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 > macOS support is in beta. Please open an issue if something breaks.
 
 ```bash
-git clone https://github.com/D3V0NT/claude-code-backup.git
+git clone https://github.com/devontoh/claude-code-backup.git
 cd claude-code-backup
 bash install.sh
 ```
