@@ -1,4 +1,4 @@
-# Claude Code Back Up - Installer
+# Claude Code Back Up - Windows Installer
 # Built by Devon T. | https://www.linkedin.com/in/devontoh/
 #
 # Run this once from the folder where you cloned the repo:
@@ -9,6 +9,7 @@ $ErrorActionPreference = "Continue"
 $KEY_FILE      = "$PSScriptRoot\.claude-backup-key"
 $REMOTE_NAME   = "gdrive"
 $REMOTE_FOLDER = "ClaudeCodeBackups"
+$RCLONE_CONF   = "$env:APPDATA\rclone\rclone.conf"
 $SETTINGS_FILE = "$env:USERPROFILE\.claude\settings.json"
 $RUN_SCRIPT    = "$PSScriptRoot\run.ps1"
 $BACKUP_SCRIPT = "$PSScriptRoot\backup.ps1"
@@ -35,7 +36,8 @@ if (-not (Get-Command rclone -ErrorAction SilentlyContinue)) {
     Write-Host "  rclone: already installed" -ForegroundColor Green
 }
 
-if (-not (Get-Command gpg -ErrorAction SilentlyContinue) -and -not (Test-Path "C:\Program Files\GnuPG\bin\gpg.exe")) {
+$gpgInstalled = (Get-Command gpg -ErrorAction SilentlyContinue) -or (Test-Path "C:\Program Files\GnuPG\bin\gpg.exe")
+if (-not $gpgInstalled) {
     Write-Host "  Installing GPG..." -ForegroundColor Gray
     winget install GnuPG.GnuPG --silent --accept-package-agreements --accept-source-agreements
 } else {
@@ -44,23 +46,48 @@ if (-not (Get-Command gpg -ErrorAction SilentlyContinue) -and -not (Test-Path "C
 
 Write-Host ""
 
-# Step 2: Configure Google Drive
+# Step 2: Connect Google Drive (fully automated - browser only, no menus)
 Write-Host "Step 2: Connecting Google Drive..." -ForegroundColor Yellow
 
-$remotes = & rclone listremotes --log-level ERROR 2>$null
-if ($remotes -notcontains ($REMOTE_NAME + ":")) {
-    Write-Host "  Launching rclone config..." -ForegroundColor Gray
-    Write-Host "  Create a new remote, choose Google Drive, name it '$REMOTE_NAME'." -ForegroundColor Gray
-    Write-Host ""
-    & rclone config
+$remoteExists = (Test-Path $RCLONE_CONF) -and ((Get-Content $RCLONE_CONF -Raw -ErrorAction SilentlyContinue) -match '\[gdrive\]')
+
+if ($remoteExists) {
+    Write-Host "  Google Drive remote 'gdrive': already configured" -ForegroundColor Green
 } else {
-    Write-Host "  Google Drive remote '$REMOTE_NAME': already configured" -ForegroundColor Green
+    Write-Host "  Your browser will open for Google sign-in." -ForegroundColor Gray
+    Write-Host "  Sign in, allow access, then come back here." -ForegroundColor Gray
+    Write-Host ""
+
+    $authRaw = & rclone authorize "drive" 2>$null
+
+    # Extract token from between rclone's output markers
+    $capturing = $false
+    $tokenParts = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in $authRaw) {
+        $s = "$line"
+        if ($s -match 'Paste the following') { $capturing = $true; continue }
+        if ($s -match 'End paste')           { $capturing = $false; continue }
+        if ($capturing -and $s.Trim() -ne '')  { $tokenParts.Add($s.Trim()) }
+    }
+    $token = ($tokenParts -join "").Trim()
+
+    if (-not $token) {
+        Write-Host "  ERROR: Could not get Google Drive token. Re-run install.ps1." -ForegroundColor Red
+        exit 1
+    }
+
+    # Write rclone config directly - avoids CLI quoting issues with the JSON token
+    New-Item -ItemType Directory -Force -Path (Split-Path $RCLONE_CONF) | Out-Null
+    $entry = "`r`n[gdrive]`r`ntype = drive`r`nscope = drive`r`ntoken = $token`r`n"
+    Add-Content -Path $RCLONE_CONF -Value $entry -Encoding UTF8
+
+    Write-Host "  Google Drive connected." -ForegroundColor Green
 }
 
 & rclone mkdir ($REMOTE_NAME + ":" + $REMOTE_FOLDER) --log-level ERROR 2>$null
 Write-Host ""
 
-# Step 3: Set encryption passphrase
+# Step 3: Encryption passphrase
 Write-Host "Step 3: Setting encryption passphrase..." -ForegroundColor Yellow
 
 if (Test-Path $KEY_FILE) {
@@ -100,8 +127,7 @@ Write-Host "Step 4: Adding Claude Code hook..." -ForegroundColor Yellow
 $hookCmd = "powershell -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$RUN_SCRIPT`""
 
 if (Test-Path $SETTINGS_FILE) {
-    $raw      = Get-Content $SETTINGS_FILE -Raw -Encoding UTF8
-    $settings = $raw | ConvertFrom-Json
+    $settings = Get-Content $SETTINGS_FILE -Raw -Encoding UTF8 | ConvertFrom-Json
 } else {
     $settings = [PSCustomObject]@{}
 }
@@ -132,7 +158,7 @@ if (-not $alreadyAdded) {
 
 Write-Host ""
 
-# Step 5: Run first backup
+# Step 5: First backup
 Write-Host "Step 5: Running first backup..." -ForegroundColor Yellow
 Write-Host "  This may take several minutes depending on your Documents size." -ForegroundColor Gray
 Write-Host ""
@@ -142,6 +168,6 @@ Write-Host ""
 Write-Host ""
 Write-Host "=== Setup complete ===" -ForegroundColor Green
 Write-Host ""
-Write-Host "From now on, Claude Code backs itself up every time you end a session." -ForegroundColor Cyan
-Write-Host "Check the latest backup any time: .\backup.ps1 -Check" -ForegroundColor DarkGray
+Write-Host "Claude Code now backs itself up after every session." -ForegroundColor Cyan
+Write-Host "Check anytime: .\backup.ps1 -Check" -ForegroundColor DarkGray
 Write-Host ""

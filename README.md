@@ -46,10 +46,10 @@ bash install.sh
 ```
 
 The installer will:
-1. Install `rclone` and `GPG` if not already installed
-2. Walk you through connecting your Google Drive (browser sign-in, 2 minutes)
+1. Install `rclone` and `GPG` automatically if not present
+2. Open your browser for Google Drive sign-in (no menus, no numbered lists - just sign in and allow access)
 3. Ask you to set an encryption passphrase
-4. Wire up the Claude Code hook so backups run automatically after every session
+4. Wire the Claude Code Stop hook so backups run automatically after every session
 5. Run your first backup immediately
 
 > **Important:** Save your passphrase in a password manager as soon as the installer asks.

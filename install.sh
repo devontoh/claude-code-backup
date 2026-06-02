@@ -10,6 +10,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REMOTE_NAME="gdrive"
 REMOTE_FOLDER="ClaudeCodeBackups"
+RCLONE_CONF="$HOME/.config/rclone/rclone.conf"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 RUN_SCRIPT="$SCRIPT_DIR/run.sh"
 BACKUP_SCRIPT="$SCRIPT_DIR/backup.sh"
@@ -44,16 +45,36 @@ fi
 chmod +x "$BACKUP_SCRIPT" "$RUN_SCRIPT"
 echo ""
 
-# Step 2: Google Drive
+# Step 2: Connect Google Drive (browser only, no menus)
 echo "Step 2: Connecting Google Drive..."
 
-if ! rclone listremotes --log-level ERROR 2>/dev/null | grep -q "^${REMOTE_NAME}:"; then
-    echo "  Launching rclone config..."
-    echo "  Create a new remote, choose Google Drive, name it '$REMOTE_NAME'."
-    echo ""
-    rclone config
+REMOTE_EXISTS=false
+if [ -f "$RCLONE_CONF" ] && grep -q '\[gdrive\]' "$RCLONE_CONF" 2>/dev/null; then
+    REMOTE_EXISTS=true
+fi
+
+if [ "$REMOTE_EXISTS" = "true" ]; then
+    echo "  Google Drive remote 'gdrive': already configured"
 else
-    echo "  Google Drive remote '$REMOTE_NAME': already configured"
+    echo "  Your browser will open for Google sign-in."
+    echo "  Sign in, allow access, then come back here."
+    echo ""
+
+    AUTH_OUTPUT=$(rclone authorize "drive" 2>/dev/null)
+
+    # Extract token from between rclone's output markers
+    TOKEN=$(echo "$AUTH_OUTPUT" | awk '/Paste the following/{p=1;next} /End paste/{p=0} p' | tr -d '\n\r ')
+
+    if [ -z "$TOKEN" ]; then
+        echo "  ERROR: Could not get Google Drive token. Re-run install.sh."
+        exit 1
+    fi
+
+    # Write rclone config directly - avoids shell quoting issues with the JSON token
+    mkdir -p "$(dirname "$RCLONE_CONF")"
+    printf '\n[gdrive]\ntype = drive\nscope = drive\ntoken = %s\n' "$TOKEN" >> "$RCLONE_CONF"
+
+    echo "  Google Drive connected."
 fi
 
 rclone mkdir "$REMOTE_NAME:$REMOTE_FOLDER" --log-level ERROR 2>/dev/null || true
@@ -62,9 +83,9 @@ echo ""
 # Step 3: Encryption passphrase
 echo "Step 3: Setting encryption passphrase..."
 
-existing=$(security find-generic-password -a "claude-backup" -s "ClaudeCodeBackup" -w 2>/dev/null || true)
+EXISTING_PASS=$(security find-generic-password -a "claude-backup" -s "ClaudeCodeBackup" -w 2>/dev/null || true)
 
-if [ -n "$existing" ]; then
+if [ -n "$EXISTING_PASS" ]; then
     echo "  Passphrase already set in Keychain. Skipping."
 else
     echo "  This passphrase encrypts every backup. Save it in your password manager."
@@ -79,9 +100,8 @@ else
         exit 1
     fi
 
-    security add-generic-password -a "claude-backup" -s "ClaudeCodeBackup" -w "$PASS1" 2>/dev/null \
-        || security delete-generic-password -a "claude-backup" -s "ClaudeCodeBackup" 2>/dev/null \
-        && security add-generic-password -a "claude-backup" -s "ClaudeCodeBackup" -w "$PASS1"
+    security delete-generic-password -a "claude-backup" -s "ClaudeCodeBackup" 2>/dev/null || true
+    security add-generic-password -a "claude-backup" -s "ClaudeCodeBackup" -w "$PASS1"
 
     echo ""
     echo "  Passphrase saved to macOS Keychain."
@@ -99,10 +119,10 @@ echo "Step 4: Adding Claude Code hook..."
 HOOK_CMD="bash \"$RUN_SCRIPT\""
 
 python3 - <<PYEOF
-import json, os, sys
+import json, os
 
 settings_path = "$SETTINGS_FILE"
-hook_cmd = "$HOOK_CMD"
+hook_cmd = r"""$HOOK_CMD"""
 
 try:
     with open(settings_path, "r", encoding="utf-8") as f:
@@ -146,6 +166,6 @@ bash "$BACKUP_SCRIPT"
 echo ""
 echo "=== Setup complete ==="
 echo ""
-echo "From now on, Claude Code backs itself up every time you end a session."
-echo "Check the latest backup any time: ./backup.sh --check"
+echo "Claude Code now backs itself up after every session."
+echo "Check anytime: ./backup.sh --check"
 echo ""
