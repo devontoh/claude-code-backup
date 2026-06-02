@@ -63,7 +63,7 @@ else
     AUTH_OUTPUT=$(rclone authorize "drive" 2>/dev/null)
 
     # Extract token from between rclone's output markers
-    TOKEN=$(echo "$AUTH_OUTPUT" | awk '/Paste the following/{p=1;next} /End paste/{p=0} p' | tr -d '\n\r ')
+    TOKEN=$(echo "$AUTH_OUTPUT" | awk '/Paste the following/{p=1;next} /End paste/{p=0} p' | tr -d '\n\r')
 
     if [ -z "$TOKEN" ]; then
         echo "  ERROR: Could not get Google Drive token. Re-run install.sh."

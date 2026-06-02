@@ -31,19 +31,23 @@ If you tried uploading your projects manually to iCloud or Google Drive and it a
 
 ## Setup
 
-Clone or download this repo, open a terminal in the folder, then run one command.
-
 ### Windows
 
 ```powershell
+git clone https://github.com/D3V0NT/claude-code-backup.git
+cd claude-code-backup
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 ### macOS
 
 ```bash
+git clone https://github.com/D3V0NT/claude-code-backup.git
+cd claude-code-backup
 bash install.sh
 ```
+
+> **Note:** Do not move the folder after running the installer. The hook stores the full path to this folder. If you move it, run `install.ps1` or `install.sh` again from the new location.
 
 The installer will:
 1. Install `rclone` and `GPG` automatically if not present
