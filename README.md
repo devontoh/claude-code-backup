@@ -25,8 +25,8 @@ If you tried uploading your projects manually to iCloud or Google Drive and it a
 
 - Google Drive account
 - Claude Code installed
-- Windows 10/11 (fully tested)
-- macOS (beta, not yet production-tested)
+- Windows 10/11
+- macOS (beta)
 
 ---
 
@@ -42,7 +42,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 ### macOS (beta)
 
-> The macOS version has not been production-tested yet. Use at your own risk and please open an issue if something breaks.
+> macOS support is in beta. Please open an issue if something breaks.
 
 ```bash
 git clone https://github.com/D3V0NT/claude-code-backup.git
